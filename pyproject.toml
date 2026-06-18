@@ -1,0 +1,19 @@
+[project]
+name = "spelling-test"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "MisterSeajay", email = "19669091+MisterSeajay@users.noreply.github.com" }
+]
+requires-python = "==3.13.*"
+dependencies = [
+    "gtts>=2.5.4",
+    "jsonpath>=0.82.2",
+    "pygame>=2.6.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
