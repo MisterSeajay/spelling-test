@@ -43,16 +43,27 @@ nohup.out
 *.local*
 local/
 
+# remove-git-identity purge patterns. These name real people, addresses and
+# former handles, so they must never be committed to a public repository.
+.remove-git-identity.toml
+
 ###############################################################################
 # IDE, editors & AI agents
 ###############################################################################
 
 .idea/
-*.swp
-*.swo
-*~
-.vscode/settings.json
+.vscode/.ropeproject/
+.vscode/*.log
+.vscode/ipch/
 *.code-workspace
+*.DotSettings.user
+*.sln.docstates
+*.suo
+*.swo
+*.swp
+*.user
+*.userosscache
+*~
 
 # AI coding agents
 .claude/scheduled_tasks.lock
