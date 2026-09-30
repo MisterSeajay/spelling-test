@@ -69,7 +69,7 @@ The following commands will create a folder called **Git** in your home director
 cd ~
 mkdir Git
 cd Git
-git clone https://github.com/cjj1977/spelling_test.git
+git clone https://github.com/MisterSeajay/spelling_test.git
 ~~~
 
 ## Running the spelling test
