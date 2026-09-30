@@ -1,14 +1,34 @@
-#!/usr/bin/python3
-import argparse
-import pathlib
+import json
 import re
-import random
-from profile import Profile
-from audio_handler import init_audio, get_mp3_audio, play_audio
-from dictionary_handler import load_dictionary, get_word_help, get_random_words
+import sys
+from pathlib import Path
+from typing import Any
 
-MP3_PATH = pathlib.Path.cwd().joinpath("mp3_cache")
-DIC_PATH = pathlib.Path.cwd().joinpath("data/dictionary.json").absolute().as_posix()
+import typer
+from loguru import logger
+from rich.console import Console
+
+from .audio_handler import get_mp3_audio, init_audio, play_audio
+from .dictionary_handler import get_random_words, get_word_help, load_dictionary
+from .user_profile import Profile
+
+MP3_PATH = Path.cwd().joinpath("mp3_cache")
+
+cli = typer.Typer(
+    name="spelling-test",
+    help="A simple spelling test!",
+    no_args_is_help=True,
+    add_completion=False,
+)
+console = Console()
+
+
+def configure_logging(verbose: bool, debug: bool) -> None:
+    """Loguru writes to stderr; default level is SUCCESS, raised by the CLI switches."""
+    level = "DEBUG" if debug else "INFO" if verbose else "SUCCESS"
+    logger.remove()
+    logger.add(sys.stderr, level=level, format="<level>{level: <8}</level> {message}")
+
 
 def get_user_profile(user: str) -> Profile:
     user_profile = Profile(user)
@@ -16,38 +36,63 @@ def get_user_profile(user: str) -> Profile:
         user_profile.load_profile()
     return user_profile
 
-def main(user: str = None, list_level: int = None, list_name: str = "*", questions: int = 10):
+
+def create_path(path: Path) -> None:
+    if not path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+
+
+def ask(question: str) -> str:
+    """Prompt on stderr so piped stdout stays clean for `--json`."""
+    return console.input(f"[bold]{question}[/bold]")
+
+
+@cli.command()
+def test(
+    user: str = typer.Option(None, "--user", "-u", help="The name of the profile to use for the test"),
+    level: int = typer.Option(None, "--level", "-l", help="The level (school year) to test at"),
+    list_name: str = typer.Option("*", "--test", "-t", help="The named list of words to be tested on"),
+    questions: int = typer.Option(10, "--questions", "-q", help="The number of words to test (default 10)"),
+    as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON instead of rich output"),
+    verbose: bool = typer.Option(False, "--verbose", help="Show INFO level logs"),
+    debug: bool = typer.Option(False, "--debug", help="Show DEBUG level logs"),
+) -> None:
+    """Run a spelling test."""
+    configure_logging(verbose, debug)
+
     create_path(MP3_PATH)
     dictionary = load_dictionary()
     definitions = get_word_help(dictionary, "definitions")
     examples = get_word_help(dictionary, "examples")
 
     if not user:
-        user = input("Please enter your name: ")
+        user = ask("Please enter your name: ")
 
-    profile = get_user_profile(str.lower(user))
+    profile = get_user_profile(user.lower())
 
-    if not list_level:
-        list_level = profile.level
+    if not level:
+        level = profile.level
 
-    words = list(
-        get_random_words(list_level, list_name, questions, dictionary, profile)
-    )
+    words = get_random_words(level, list_name, questions, dictionary, profile)
+    logger.info(f"Selected {len(words)} words for {profile.display_name} at level {level}")
 
     if list_name == "*":
-        print(f"Hello, {profile.display_name}. Today's test will be {len(words)} questions at level {list_level}")
+        greeting = f"Today's test will be {len(words)} questions at level {level}"
     else:
-        print(f"Hello, {profile.display_name}. Today's test will be {len(words)} questions from the {list_name} list(s)")
+        greeting = f"Today's test will be {len(words)} questions from the {list_name} list(s)"
+
+    if not as_json:
+        console.print(f"Hello, {profile.display_name}. {greeting}")
 
     count = 0
     init_audio()
 
-    for word in words:
+    for count, word in enumerate(words, start=1):
         if word not in profile.words:
             profile.words[word] = 0
 
-        count += 1
         mp3_file = get_mp3_audio(word)
+        logger.debug(f"Question {count}/{len(words)}: {word!r} ({mp3_file})")
 
         attempts = 0
         attempt = ""
@@ -63,30 +108,30 @@ def main(user: str = None, list_level: int = None, list_name: str = "*", questio
             if word in examples:
                 question += f'\nExample is "{examples[word]}": '
 
-            attempt = input(question)
+            attempt = ask(question)
 
             if attempt == "?show":
-                print(word)
+                console.print(word)
 
         profile.words[word] = profile.words[word] + (attempts - 2)
 
-    print("Well done, you've completed the test!\n")
+    results: dict[str, Any] = {
+        "user": profile.display_name,
+        "level": level,
+        "questions": len(words),
+        "words": [{"word": word, "score": profile.words[word]} for word in words],
+    }
 
-    for word in words:
-        print(f"Word: {word}, score {profile.words[word]:02d}")
+    if as_json:
+        print(json.dumps(results))
+    else:
+        console.print("\n[bold green]Well done, you've completed the test![/bold green]\n")
+        for word in words:
+            console.print(f"Word: {word}, score {profile.words[word]:02d}")
 
     profile.save_profile()
+    logger.info(f"Saved profile to {profile.profile_path}")
 
-def create_path(path):
-    if not path.exists():
-        path.mkdir(parents=True, exist_ok=True)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="A simple spelling test!")
-    parser.add_argument("--user", help="The name of the profile to use for the test")
-    parser.add_argument("--level", help="The level (school year) to test at", dest="list_level", type=int)
-    parser.add_argument("--test", help="The named list of words you want to be tested on", default="*", dest="list_name")
-    parser.add_argument("--questions", help="The number of words to test (Default 10)", default=10, type=int)
-    args = parser.parse_args()
-
-    main(user=args.user, list_level=args.list_level, list_name=args.list_name, questions=args.questions)
+    cli()

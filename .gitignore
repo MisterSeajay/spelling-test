@@ -12,7 +12,12 @@
 
 # OS files
 .DS_Store
+*.lnk
+*~
+$RECYCLE.BIN/
 desktop.ini
+Desktop.ini
+ehthumbs.db
 Thumbs.db
 
 # Secrets

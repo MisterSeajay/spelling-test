@@ -1,2 +1,3 @@
-def hello() -> str:
-    return "Hello from spelling-test!"
+from .main import cli
+
+__all__ = ["cli"]
